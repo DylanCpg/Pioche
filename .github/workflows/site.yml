@@ -1,0 +1,57 @@
+name: Publier Pioche
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+
+      - name: Déballer le zip du projet s'il a été déposé
+        run: |
+          if [ -f pioche-projet.zip ]; then
+            unzip -o -q pioche-projet.zip -d /tmp/projet
+            cp -r /tmp/projet/pioche/. .
+            echo "Projet déballé depuis pioche-projet.zip"
+          fi
+
+      - name: Installer Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Générer les cartes Wikidata
+        continue-on-error: true
+        run: node scripts/wikidata.mjs
+
+      - name: Numéroter la version
+        run: sed -i "s/__VERSION__/${{ github.run_number }}/" www/sw.js
+
+      - name: Préparer GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Envoyer le site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+
+      - name: Mettre en ligne
+        id: deploiement
+        uses: actions/deploy-pages@v4
